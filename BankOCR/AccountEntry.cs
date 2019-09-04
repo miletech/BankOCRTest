@@ -6,8 +6,6 @@ namespace BankOCR
 {
     public class AccountEntry
     {
-        #region Private Properties
-
         private List<string> _possibleCorrectAccounts;
 
         private const byte SEGMENT_A = 0x01;
@@ -18,14 +16,11 @@ namespace BankOCR
         private const byte SEGMENT_F = 0x20;
         private const byte SEGMENT_G = 0x40;
 
-        #endregion
-
-        #region Public Properties
-        public bool IsIlegible { get; private set; }
+        public bool IsIllegible { get; private set; }
         public bool IsValid { get; private set; }
         public byte[] AccountNumbers { get; } = new byte[9];
         public string AccountString { get; private set; }
-        public string AccountStatus => $"{AccountString}{(IsValid ? "" : (IsIlegible ? " ILL" : " ERR")) }";
+        public string AccountStatus => $"{AccountString}{(IsValid ? "" : (IsIllegible ? " ILL" : " ERR")) }";
 
         public string AccountPrediction
         {
@@ -46,9 +41,6 @@ namespace BankOCR
             }
         }
 
-        #endregion
-
-        #region Constructors
         public AccountEntry(params string[] lines)
         {
             //Account numbers are stored following seven-segment display structure
@@ -65,30 +57,25 @@ namespace BankOCR
             }
         }
 
-        #endregion
-
-
-        #region Private methods
         private void Init()
         {
-            var accountInformation = MathHelper.ConvertSevenSegmentToString(AccountNumbers);
+            var (accountNumber, isIllegible) = MathHelper.ConvertSevenSegmentToString(AccountNumbers);
 
-            AccountString = accountInformation.Item1;
-            IsIlegible = accountInformation.Item2;
+            AccountString = accountNumber;
+            IsIllegible = isIllegible;
 
-            if (!IsIlegible)
+            if (!IsIllegible)
             {
                 IsValid = MathHelper.IsCheckSumValid(AccountString);
             }
 
-            if (IsIlegible || !IsValid)
+            if (IsIllegible || !IsValid)
             {
                 _possibleCorrectAccounts = MathHelper.ObtainPossibleValues(AccountNumbers);
             }
         }
 
-        //The segments will have different weights depending on the line
-        private void ProcessLine(string line, byte weight1, byte weight2, byte weight3)
+        private void ProcessLine(string line, byte leftBit, byte middleBit, byte rightBit)
         {
             if (line != null)
             {
@@ -98,20 +85,18 @@ namespace BankOCR
 
                     if (i % 3 == 0 && line[i] == '|')
                     {
-                        AccountNumbers[index] |= weight1;
+                        AccountNumbers[index] |= leftBit;
                     }
                     else if (i % 3 == 1 && line[i] == '_')
                     {
-                        AccountNumbers[index] |= weight2;
+                        AccountNumbers[index] |= middleBit;
                     }
                     else if (i % 3 == 2 && line[i] == '|')
                     {
-                        AccountNumbers[index] |= weight3;
+                        AccountNumbers[index] |= rightBit;
                     }
                 }
             }
         }
-
-        #endregion
     }
 }
