@@ -1,89 +1,76 @@
 ﻿using BankOCR.Enums;
-using BankOCR.Extensions;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Reflection;
 
 namespace BankOCR.Helpers
 {
     public static class MathHelper
     {
-        //Checksum calculation
-        public static bool IsCheckSumValid(string accountNumber)
-        {
-            int checkSum = 0, number, multiplier = 1;
+        public static bool IsCheckSumValid(string accountNumber) =>
+            accountNumber
+                .Reverse()
+                .Select((x, i) => (i + 1) * int.Parse(x.ToString()))
+                .Sum() % 11 == 0;
 
-            for (int i = accountNumber.Length - 1; i >= 0; i--)
-            {
-                if (int.TryParse(accountNumber[i].ToString(), out number))
-                {
-                    checkSum += multiplier * number;
-                }
-                else
-                {
-                    return false;
-                }
-                multiplier++;
-            }
-
-            return checkSum % 11 == 0;
-        }
-
-        //Converts an byte array which contains information of the segments which are on
-        //Outputs:
-        //string: Account number
-        //bool: IsIlegible
         public static (string, bool) ConvertSevenSegmentToString(byte[] sevenSegmentArray)
         {
-            string accountNumber = string.Empty;
-            bool isIlegible = false;
+            var accountNumber = string.Empty;
+            var isIllegible = false;
 
             foreach (var number in sevenSegmentArray)
             {
                 if (Enum.IsDefined(typeof(SevenSegments), (int)number))
                 {
-                    accountNumber += ((SevenSegments)number).GetDescription();
+                    var value = (SevenSegments)number;
+                    var type = value.GetType();
+                    var digit = type
+                        .GetField(Enum.GetName(type, value))
+                        .GetCustomAttribute<DescriptionAttribute>()
+                        .Description;
+
+                    accountNumber += digit;
                 }
                 else
                 {
                     accountNumber += "?";
-                    isIlegible = true;
+                    isIllegible = true;
                 }
             }
 
-            return (accountNumber, isIlegible);
+            return (accountNumber, isIllegible);
         }
 
-        //Inverts all the possible bits and check that the new account number is valid and eligible
         public static List<string> ObtainPossibleValues(byte[] wrongAccountNumber)
         {
-            List<string> possibleValues = new List<string>();
+            var possibleValues = new List<string>();
 
             for (int index = 0; index < wrongAccountNumber.Length; index++)
             {
-                for (int mask = 1; mask <= 128; mask = mask << 1)
+                for (int mask = 1; mask <= 128; mask <<= 1)
                 {
-                    if (Enum.IsDefined(typeof(SevenSegments), (int)wrongAccountNumber[index] ^ mask))
+                    if (Enum.IsDefined(typeof(SevenSegments), wrongAccountNumber[index] ^ mask))
                     {
-                        wrongAccountNumber[index] = (byte)((int)wrongAccountNumber[index] ^ mask);
+                        wrongAccountNumber[index] = (byte)(wrongAccountNumber[index] ^ mask);
 
-                        var accountInfo = ConvertSevenSegmentToString(wrongAccountNumber);
+                        var (accountNumber, isIllegible) = ConvertSevenSegmentToString(wrongAccountNumber);
 
-                        if (!accountInfo.Item2)
+                        if (!isIllegible)
                         {
-                            if (IsCheckSumValid(accountInfo.Item1))
+                            if (IsCheckSumValid(accountNumber))
                             {
-                                possibleValues.Add(accountInfo.Item1);
+                                possibleValues.Add(accountNumber);
                             }
                         }
 
                         //Come back to the previous value
-                        wrongAccountNumber[index] = (byte)((int)wrongAccountNumber[index] ^ mask);
+                        wrongAccountNumber[index] = (byte)(wrongAccountNumber[index] ^ mask);
                     }
                 }
             }
-            
             return possibleValues;
         }
-
     }
 }
